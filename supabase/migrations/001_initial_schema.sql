@@ -4,7 +4,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- ============================================================
 -- PROFILES TABLE (extends Supabase auth.users)
 -- ============================================================
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT NOT NULL,
   full_name TEXT,
@@ -15,18 +15,24 @@ CREATE TABLE public.profiles (
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own profile"
-  ON public.profiles FOR SELECT
-  USING (auth.uid() = id);
+DO $$ BEGIN
+  CREATE POLICY "Users can view their own profile"
+    ON public.profiles FOR SELECT
+    USING (auth.uid() = id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can update their own profile"
-  ON public.profiles FOR UPDATE
-  USING (auth.uid() = id);
+DO $$ BEGIN
+  CREATE POLICY "Users can update their own profile"
+    ON public.profiles FOR UPDATE
+    USING (auth.uid() = id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ============================================================
 -- BUSINESS PROFILES TABLE
 -- ============================================================
-CREATE TABLE public.business_profiles (
+CREATE TABLE IF NOT EXISTS public.business_profiles (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
 
@@ -75,22 +81,31 @@ CREATE TABLE public.business_profiles (
 
 ALTER TABLE public.business_profiles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own business profile"
-  ON public.business_profiles FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "Users can view their own business profile"
+    ON public.business_profiles FOR SELECT
+    USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can insert their own business profile"
-  ON public.business_profiles FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "Users can insert their own business profile"
+    ON public.business_profiles FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can update their own business profile"
-  ON public.business_profiles FOR UPDATE
-  USING (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "Users can update their own business profile"
+    ON public.business_profiles FOR UPDATE
+    USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ============================================================
 -- CALL LOGS TABLE
 -- ============================================================
-CREATE TABLE public.call_logs (
+CREATE TABLE IF NOT EXISTS public.call_logs (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   business_id UUID REFERENCES public.business_profiles(id) ON DELETE CASCADE NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -112,14 +127,17 @@ CREATE TABLE public.call_logs (
 
 ALTER TABLE public.call_logs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own call logs"
-  ON public.call_logs FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "Users can view their own call logs"
+    ON public.call_logs FOR SELECT
+    USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ============================================================
--- AUDIT LOG / SUBSCRIPTIONS EVENTS TABLE
+-- SUBSCRIPTION EVENTS TABLE
 -- ============================================================
-CREATE TABLE public.subscription_events (
+CREATE TABLE IF NOT EXISTS public.subscription_events (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   business_id UUID REFERENCES public.business_profiles(id) ON DELETE CASCADE,
@@ -131,9 +149,12 @@ CREATE TABLE public.subscription_events (
 
 ALTER TABLE public.subscription_events ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own subscription events"
-  ON public.subscription_events FOR SELECT
-  USING (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "Users can view their own subscription events"
+    ON public.subscription_events FOR SELECT
+    USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ============================================================
 -- FUNCTIONS & TRIGGERS
@@ -153,7 +174,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE OR REPLACE TRIGGER on_auth_user_created
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
@@ -166,10 +188,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
 CREATE TRIGGER update_profiles_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_business_profiles_updated_at ON public.business_profiles;
 CREATE TRIGGER update_business_profiles_updated_at
   BEFORE UPDATE ON public.business_profiles
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -177,7 +201,7 @@ CREATE TRIGGER update_business_profiles_updated_at
 -- ============================================================
 -- INDEXES
 -- ============================================================
-CREATE INDEX idx_business_profiles_user_id ON public.business_profiles(user_id);
-CREATE INDEX idx_business_profiles_stripe_customer ON public.business_profiles(stripe_customer_id);
-CREATE INDEX idx_call_logs_business_id ON public.call_logs(business_id);
-CREATE INDEX idx_call_logs_created_at ON public.call_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_business_profiles_user_id ON public.business_profiles(user_id);
+CREATE INDEX IF NOT EXISTS idx_business_profiles_stripe_customer ON public.business_profiles(stripe_customer_id);
+CREATE INDEX IF NOT EXISTS idx_call_logs_business_id ON public.call_logs(business_id);
+CREATE INDEX IF NOT EXISTS idx_call_logs_created_at ON public.call_logs(created_at DESC);
