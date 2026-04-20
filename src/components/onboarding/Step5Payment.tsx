@@ -113,7 +113,7 @@ export function Step5Payment({ onBack }: Props) {
       {profileReady && (
         <StripePaymentForm
           priceId={selectedPlan.priceId}
-          businessName={formData.business_name}
+          businessName={formData.business_name || ''}
           planName={selectedPlan.name}
           price={price}
           billingCycle={formData.billing_cycle || 'monthly'}
