@@ -81,6 +81,39 @@ export async function POST(request: NextRequest) {
           .eq('stripe_customer_id', invoice.customer as string)
         break
       }
+
+      case 'customer.subscription.trial_will_end': {
+        // 3 days before trial ends — could send reminder email here
+        break
+      }
+    }
+
+    // Trigger auto-setup after subscription created/updated
+    if (
+      event.type === 'customer.subscription.created' ||
+      event.type === 'checkout.session.completed'
+    ) {
+      const obj = event.data.object as Stripe.Subscription | Stripe.Checkout.Session
+      const customerId = 'customer' in obj ? (obj.customer as string) : null
+      if (customerId) {
+        const { data: business } = await supabase
+          .from('business_profiles')
+          .select('id, user_id, setup_completed')
+          .eq('stripe_customer_id', customerId)
+          .single()
+
+        if (business && !business.setup_completed) {
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+          fetch(`${appUrl}/api/setup/auto`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-internal-secret': process.env.INTERNAL_API_SECRET || '',
+            },
+            body: JSON.stringify({ businessId: business.id, userId: business.user_id }),
+          }).catch(() => {})
+        }
+      }
     }
 
     await supabase.from('subscription_events').insert({

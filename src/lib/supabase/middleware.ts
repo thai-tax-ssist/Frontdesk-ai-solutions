@@ -29,25 +29,55 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  const publicRoutes = ['/', '/pricing', '/about', '/contact']
   const authRoutes = ['/sign-in', '/sign-up', '/forgot-password', '/reset-password']
-  const protectedRoutes = ['/dashboard', '/onboarding', '/settings', '/billing']
+  const protectedRoutes = ['/dashboard', '/settings', '/billing']
+  const onboardingRoute = '/onboarding'
 
-  const isPublicRoute = publicRoutes.includes(pathname)
   const isAuthRoute = authRoutes.some((r) => pathname.startsWith(r))
   const isProtectedRoute = protectedRoutes.some((r) => pathname.startsWith(r))
+  const isOnboarding = pathname.startsWith(onboardingRoute)
 
-  if (!user && isProtectedRoute) {
+  // Unauthenticated users can't access protected pages or onboarding
+  if (!user && (isProtectedRoute || isOnboarding)) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/sign-in'
     redirectUrl.searchParams.set('redirectTo', pathname)
     return NextResponse.redirect(redirectUrl)
   }
 
+  // Authenticated users on auth routes → send to dashboard
   if (user && isAuthRoute) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/dashboard'
     return NextResponse.redirect(redirectUrl)
+  }
+
+  // For authenticated users hitting protected dashboard routes, enforce subscription
+  if (user && isProtectedRoute) {
+    const { data: business } = await supabase
+      .from('business_profiles')
+      .select('subscription_status, onboarding_completed')
+      .eq('user_id', user.id)
+      .single()
+
+    // No business profile yet → complete onboarding first
+    if (!business) {
+      const redirectUrl = request.nextUrl.clone()
+      redirectUrl.pathname = '/onboarding'
+      return NextResponse.redirect(redirectUrl)
+    }
+
+    // Has profile but payment not done (incomplete = no subscription started)
+    // Redirect to the payment step so they can't skip card collection
+    if (
+      business.subscription_status === 'incomplete' &&
+      !business.onboarding_completed
+    ) {
+      const redirectUrl = request.nextUrl.clone()
+      redirectUrl.pathname = '/onboarding'
+      redirectUrl.searchParams.set('step', 'payment')
+      return NextResponse.redirect(redirectUrl)
+    }
   }
 
   return supabaseResponse

@@ -83,6 +83,46 @@ export async function createBillingPortalSession({
   })
 }
 
+export async function createSetupIntent(customerId: string) {
+  return stripe.setupIntents.create({
+    customer: customerId,
+    payment_method_types: ['card'],
+    usage: 'off_session',
+  })
+}
+
+export async function createTrialSubscription({
+  customerId,
+  priceId,
+  paymentMethodId,
+  userId,
+}: {
+  customerId: string
+  priceId: string
+  paymentMethodId: string
+  userId: string
+}) {
+  await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId })
+  await stripe.customers.update(customerId, {
+    invoice_settings: { default_payment_method: paymentMethodId },
+  })
+
+  return stripe.subscriptions.create({
+    customer: customerId,
+    items: [{ price: priceId }],
+    trial_period_days: 14,
+    payment_settings: {
+      payment_method_types: ['card'],
+      save_default_payment_method: 'on_subscription',
+    },
+    trial_settings: {
+      end_behavior: { missing_payment_method: 'cancel' },
+    },
+    metadata: { supabase_user_id: userId },
+    expand: ['latest_invoice.payment_intent'],
+  })
+}
+
 export function getPlanFromPriceId(priceId: string) {
   const starterPriceId = process.env.STRIPE_STARTER_PRICE_ID
   const proPriceId = process.env.STRIPE_PROFESSIONAL_PRICE_ID

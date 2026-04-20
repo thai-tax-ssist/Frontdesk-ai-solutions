@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   PhoneCall, LayoutDashboard, Settings, CreditCard,
-  LogOut, Menu, X, BarChart3, Bell, User
+  LogOut, Menu, X, BarChart3, Bot
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/dashboard/calls', icon: PhoneCall, label: 'Call Logs' },
   { href: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
+  { href: '/dashboard/anna', icon: Bot, label: 'Anna AI' },
   { href: '/settings', icon: Settings, label: 'Settings' },
   { href: '/billing', icon: CreditCard, label: 'Billing' },
 ]

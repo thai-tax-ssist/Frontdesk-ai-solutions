@@ -113,7 +113,7 @@ export function Step4Plan({ onNext, onBack }: Props) {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <span className="text-2xl font-bold">${price}</span>
+                  <span className="text-2xl font-bold">€{price}</span>
                   <span className="text-sm text-muted-foreground">/mo</span>
                 </div>
               </div>
