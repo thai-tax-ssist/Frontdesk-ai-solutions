@@ -1,147 +1,129 @@
 'use client'
 
-import { useState } from 'react'
-import { CreditCard, Shield, Check } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { CreditCard, Check, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { useOnboardingStore } from '@/store/onboarding'
 import { PRICING_PLANS } from '@/types'
-import { formatCurrency } from '@/lib/utils'
+import { StripePaymentForm } from '@/components/stripe/StripePaymentForm'
 
 interface Props {
   onBack: () => void
 }
 
 export function Step5Payment({ onBack }: Props) {
+  const router = useRouter()
   const { formData } = useOnboardingStore()
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+
+  const [profileReady, setProfileReady] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [paymentError, setPaymentError] = useState<string | null>(null)
 
   const selectedPlan = PRICING_PLANS.find((p) => p.id === formData.plan) || PRICING_PLANS[1]
   const price = formData.billing_cycle === 'yearly' ? selectedPlan.yearlyPrice : selectedPlan.price
-  const priceId = selectedPlan.priceId
+  const trialEndDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
 
-  const handleCheckout = async () => {
-    setIsLoading(true)
-    setError(null)
+  // Save the business profile as soon as this step mounts so it exists
+  // in the DB before Stripe creates the customer / SetupIntent.
+  useEffect(() => {
+    let cancelled = false
 
-    try {
-      // Save business profile before redirecting to Stripe
-      const saveResponse = await fetch('/api/onboarding', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      })
-
-      if (!saveResponse.ok) {
-        throw new Error('Failed to save business profile')
+    async function saveProfile() {
+      setSaveError(null)
+      try {
+        const res = await fetch('/api/onboarding', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || 'Failed to save business profile')
+        }
+        if (!cancelled) setProfileReady(true)
+      } catch (err) {
+        if (!cancelled) setSaveError(err instanceof Error ? err.message : 'Failed to save profile')
       }
-
-      // Create Stripe checkout session
-      const checkoutResponse = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          priceId,
-          businessName: formData.business_name,
-        }),
-      })
-
-      if (!checkoutResponse.ok) {
-        throw new Error('Failed to create checkout session')
-      }
-
-      const { url } = await checkoutResponse.json()
-      window.location.href = url
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
-      setIsLoading(false)
     }
+
+    saveProfile()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const handleSuccess = () => {
+    router.push('/onboarding?step=complete')
   }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-3 pb-2 border-b">
         <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-100">
           <CreditCard className="h-5 w-5 text-brand-600" />
         </div>
         <div>
-          <h2 className="text-xl font-bold">Start your free trial</h2>
+          <h2 className="text-xl font-bold">Add your payment details</h2>
           <p className="text-sm text-muted-foreground">
-            14 days free — no charge until your trial ends
+            Your card is saved securely — you won&apos;t be charged for 14 days.
           </p>
         </div>
       </div>
 
-      {/* Order Summary */}
-      <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-        <h3 className="font-semibold text-sm">Order summary</h3>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="font-medium">{selectedPlan.name} Plan</div>
-            <div className="text-sm text-muted-foreground capitalize">
-              Billed {formData.billing_cycle || 'monthly'}
+      {/* Plan features reminder */}
+      <div className="space-y-1.5">
+        <p className="text-sm font-medium">
+          Included in your {selectedPlan.name} trial:
+        </p>
+        <div className="grid grid-cols-2 gap-1">
+          {selectedPlan.features.slice(0, 4).map((f) => (
+            <div key={f} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Check className="h-3.5 w-3.5 text-brand-500 shrink-0" />
+              {f}
             </div>
-          </div>
-          <div className="text-right">
-            <div className="font-bold text-lg">{formatCurrency(price)}/mo</div>
-            {formData.billing_cycle === 'yearly' && (
-              <div className="text-xs text-green-600">
-                Save {formatCurrency((selectedPlan.price - price) * 12)}/year
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="border-t pt-3">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Due today</span>
-            <span className="font-bold text-lg text-green-600">$0.00</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            First charge on{' '}
-            {new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', {
-              month: 'long',
-              day: 'numeric',
-              year: 'numeric',
-            })}
-          </p>
+          ))}
         </div>
       </div>
 
-      {/* What's included */}
-      <div className="space-y-2">
-        <h3 className="font-semibold text-sm">What&apos;s included in your trial:</h3>
-        {selectedPlan.features.map((feature) => (
-          <div key={feature} className="flex items-center gap-2 text-sm">
-            <Check className="h-4 w-4 text-brand-500 shrink-0" />
-            <span>{feature}</span>
-          </div>
-        ))}
-      </div>
-
-      {error && (
-        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-          {error}
+      {/* Profile save error */}
+      {saveError && (
+        <div className="flex items-start gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{saveError} — <button type="button" className="underline" onClick={() => window.location.reload()}>retry</button></span>
         </div>
       )}
 
-      {/* Security Badge */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Shield className="h-4 w-4 text-green-500" />
-        <span>Secured by Stripe · 256-bit SSL encryption · Cancel anytime</span>
-      </div>
+      {/* Payment error from Stripe */}
+      {paymentError && (
+        <div className="flex items-start gap-2 rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{paymentError}</span>
+        </div>
+      )}
 
-      <Button
-        type="button"
-        variant="gradient"
-        size="lg"
-        className="w-full"
-        onClick={handleCheckout}
-        loading={isLoading}
-      >
-        <CreditCard className="mr-2 h-5 w-5" />
-        Start 14-day free trial
-      </Button>
+      {/* Stripe Elements — only shown once profile is saved */}
+      {!profileReady && !saveError && (
+        <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Preparing your trial…
+        </div>
+      )}
+
+      {profileReady && (
+        <StripePaymentForm
+          priceId={selectedPlan.priceId}
+          businessName={formData.business_name || ''}
+          planName={selectedPlan.name}
+          price={price}
+          billingCycle={formData.billing_cycle || 'monthly'}
+          trialEndDate={trialEndDate}
+          onSuccess={handleSuccess}
+          onError={(msg) => {
+            setPaymentError(msg)
+          }}
+        />
+      )}
 
       <div className="flex justify-start pt-2 border-t">
         <Button type="button" variant="ghost" onClick={onBack} size="sm">
