@@ -49,13 +49,13 @@ export async function POST(request: NextRequest) {
     await serviceClient.from('business_profiles').delete().eq('user_id', user.id)
     await serviceClient.from('profiles').delete().eq('id', user.id)
 
-    // Log GDPR deletion request
+    // Log GDPR deletion request (non-fatal if it fails)
     await serviceClient.from('gdpr_deletion_log').insert({
       user_id: user.id,
       email: user.email,
       deleted_at: new Date().toISOString(),
       stripe_customer_id: business?.stripe_customer_id || null,
-    }).catch(() => {})
+    })
 
     // Delete Supabase auth user
     const { error: deleteError } = await serviceClient.auth.admin.deleteUser(user.id)
