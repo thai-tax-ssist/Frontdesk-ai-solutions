@@ -1,16 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 
 // ONE-TIME USE — delete immediately after calling
 const TARGET_EMAIL = 'shalongthaifood@gmail.com'
 const NEW_PASSWORD = 'FrontDesk2026!'
 
-export async function GET(request: NextRequest) {
-  const secret = request.nextUrl.searchParams.get('secret')
-  if (!secret || secret !== process.env.INTERNAL_API_SECRET) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+export async function GET() {
   const serviceClient = createServiceClient()
 
   const { data: { users }, error: listError } = await serviceClient.auth.admin.listUsers()
