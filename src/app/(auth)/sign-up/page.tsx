@@ -60,7 +60,7 @@ export default function SignUpPage() {
 
   const onSubmit = async (data: FormData) => {
     setError(null)
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
@@ -74,7 +74,13 @@ export default function SignUpPage() {
       return
     }
 
-    router.push('/sign-up/verify?email=' + encodeURIComponent(data.email))
+    // Email confirmation is disabled — session is available immediately after signup
+    if (signUpData.session) {
+      router.push('/onboarding')
+      router.refresh()
+    } else {
+      router.push('/sign-up/verify?email=' + encodeURIComponent(data.email))
+    }
   }
 
   const signUpWithGoogle = async () => {
