@@ -43,6 +43,7 @@ export default function SignInForm() {
     })
 
     if (signInError) {
+      // Treat email_not_confirmed the same as an auth failure — confirmation is no longer required
       setError('Invalid email or password. Please try again.')
       return
     }
